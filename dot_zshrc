@@ -1,0 +1,101 @@
+export ZSH_ANTIGEN_BASE=$HOME/.antigen
+source $ZSH_ANTIGEN_BASE/antigen.zsh
+
+antigen use oh-my-zsh
+
+# Default oh-my-zsh repo plugins
+antigen bundle git
+antigen bundle pip
+
+antigen bundle zsh-users/zsh-syntax-highlighting
+antigen bundle zsh-users/zsh-autosuggestions
+
+antigen theme candy
+
+antigen apply
+
+
+# Custom stuff
+
+# Don't do pyenv inside the toolbox container
+[[ -f /run/.toolboxenv ]] || {
+  eval "$(pyenv init -)"
+  export PATH="$HOME/.local/bin:$PATH"
+}
+
+export GPG_TTY=$(tty)
+
+alias sudosh='sudo -sH'
+
+
+####################################
+# aiven.io development environment #
+####################################
+AIVEN_DEFAULT_RELEASE=31
+AIVEN_CONTAINER_PREFIX=aiven-fedora
+
+function avn-toolbox-create() {(
+  set -e
+  local release="${1:-${AIVEN_DEFAULT_RELEASE}}"
+  local container="${AIVEN_CONTAINER_PREFIX}-${release}"
+  local args=( --release "${release}" --container "${container}" )
+
+  toolbox --assumeyes create "${args[@]}"
+
+  setup=$(mktemp)
+  cat > $setup <<-EOF
+  # https://bugzilla.redhat.com/show_bug.cgi?id=1773148
+  # this does not seem to be fixed as of f31 for the container
+  echo -n "Set disable_coredump false" | sudo tee /etc/sudo.conf
+
+  # set value for GECOS field
+  sudo usermod -c "$(getent passwd \${USER} | cut -d ":" -f 5)" ${USER}
+
+  echo "keepcache=true" | sudo tee -a /etc/dnf/dnf.conf
+  echo "cachedir="\${HOME}"/.cache/dnf" | sudo tee -a /etc/dnf/dnf.conf
+  sudo dnf install -y make git pwgen findutils openssh-clients iputils bash-completion 'glibc-langpack-*' $(basename $SHELL)
+EOF
+  toolbox run "${args[@]}" bash $setup
+  rm $setup
+
+  # python wrapper for use with pycharm etc.
+  local pywrapper="${HOME}/.local/bin/python3-${container}"
+  install -d "$(dirname ${pywrapper})"
+  echo "exec -l toolbox run" "${args[@]}" "sudo -u $USER PYTHONPATH=\"\$PYTHONPATH\" /usr/bin/python3 \$@" > \
+    "${pywrapper}"
+  chmod +x ${pywrapper}
+
+  # bash wrapper for use with pycharm etc.
+  local bashwrapper="${HOME}/.local/bin/bash-${container}"
+  install -d "$(dirname ${bashwrapper})"
+  echo '#!/usr/bin/env bash' > \
+    "${bashwrapper}"
+  echo "toolbox run" "${args[@]}" "/usr/bin/bash \$@" >> \
+    "${bashwrapper}"
+  chmod +x ${bashwrapper}
+)}
+
+function avn-toolbox-clear() {(
+  set -e
+  local release="${1:-${AIVEN_DEFAULT_RELEASE}}"
+  local container="${AIVEN_CONTAINER_PREFIX}-${release}"
+
+  read -r -p "Are you sure you want to clear ${container}? [y/N] " response
+  response=${response,,}
+  if [[ "$response" =~ ^(yes|y)$ ]]; then
+    podman stop "${container}" || :
+    toolbox rm "${container}" \
+        && { find ${HOME}/.local/bin -type f -name "*-{container}" -exec rm -f {} \;; }
+  else
+    echo "Toolbox clear aborted"
+  fi
+)}
+
+function avn-toolbox-shell() {
+  local release="${1:-${AIVEN_DEFAULT_RELEASE}}"
+  local container="${AIVEN_CONTAINER_PREFIX}-${release}"
+  local args=( -r "${release}" -c "${container}" )
+  toolbox run "${args[@]}" $(basename $SHELL)
+}
+
+export PATH="$HOME/.poetry/bin:$PATH"
