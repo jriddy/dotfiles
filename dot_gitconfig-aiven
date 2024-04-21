@@ -1,0 +1,5 @@
+[user]
+	email = jreed@aiven.io
+	signingkey = A8D2E1A9349056BB
+[commit]
+	gpgsign = true
