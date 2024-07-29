@@ -1,0 +1,20 @@
+#!/bin/bash
+set -xeuo pipefail
+echo -e "\0033[0;32m>>>>> Begin Installing Fish Shell <<<<<\033[0m"
+
+{{ if (eq .chezmoi.os "linux") -}}
+# Fedora for now, can add others later
+sudo dnf install -y fish
+
+{{ else if eq .chezmoi.os "darwin" -}}
+brew install -y fish
+
+{{ end -}}
+
+# Set fish as default shell
+if [ $SHELL != $(which fish) ]; then
+  echo "Changing default shell to fish"
+  chsh -s $(which fish)
+fi
+
+echo -e "\0033[0;32m>>>>> Finish Installing Fish Shell <<<<<\033[0m"
