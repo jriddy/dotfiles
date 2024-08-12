@@ -14,7 +14,7 @@ brew install -y fish
 # Set fish as default shell
 if [ $SHELL != $(which fish) ]; then
   echo "Changing default shell to fish"
-  chsh -s $(which fish)
+  sudo chsh -u $USER -s $(which fish)
 fi
 
 echo -e "\0033[0;32m>>>>> Finish Installing Fish Shell <<<<<\033[0m"
